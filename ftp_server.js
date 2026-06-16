@@ -127,6 +127,8 @@ ftpServer.on('login', async ({ connection, username, password }, resolve, reject
 // ── 5. Background Watcher to Upload Finished Files ───────────────────────────
 // Periodically checks the temporary directory, detects when writing has finished,
 // uploads the file to Supabase, and deletes it from local storage.
+const processingFiles = new Set();
+
 setInterval(async () => {
   try {
     if (!fs.existsSync(TEMP_FTP_DIR)) return;
@@ -143,6 +145,10 @@ setInterval(async () => {
         if (filename.startsWith('.')) continue; // skip hidden files
         
         const filePath = path.join(eventPath, filename);
+        
+        // Skip if this file is already being processed
+        if (processingFiles.has(filePath)) continue;
+        
         const fileStat = fs.statSync(filePath);
         
         if (fileStat.isFile()) {
@@ -151,8 +157,17 @@ setInterval(async () => {
           const isValid = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'cr2', 'cr3', 'nef', 'arw'].includes(ext);
           if (!isValid) continue;
 
+          // Lock file before waiting to prevent other cycles from picking it up
+          processingFiles.add(filePath);
+
           // Verify writing has finished by checking if file size remains stable
           await new Promise(r => setTimeout(r, 600));
+          
+          if (!fs.existsSync(filePath)) {
+            processingFiles.delete(filePath);
+            continue;
+          }
+          
           const fileStatCheck = fs.statSync(filePath);
           
           if (fileStatCheck.size === fileStat.size && fileStat.size > 0) {
@@ -196,7 +211,12 @@ setInterval(async () => {
               fs.unlinkSync(filePath);
             } catch (err) {
               console.error(`[-] Error uploading FTP file ${filename}:`, err.message);
+            } finally {
+              processingFiles.delete(filePath);
             }
+          } else {
+            // File is still being written to, release lock so next cycle checks it again
+            processingFiles.delete(filePath);
           }
         }
       }
