@@ -134,14 +134,9 @@ export default function GuestPortal({ params }) {
   }, [eventId]);
 
   // When selfie scan completes and toggles filter, select random images to mock matches
+  // Handle filter toggle
   const handleFilterToggle = (active) => {
     setIsFilterActive(active);
-    if (active && matchedImageIds.length === 0 && images.length > 0) {
-      // Pick up to 2 random images from current gallery as "face matches"
-      const shuffled = [...images].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, Math.min(images.length, 2)).map(img => img.id);
-      setMatchedImageIds(selected);
-    }
   };
 
   // Filter photos array
@@ -250,8 +245,11 @@ export default function GuestPortal({ params }) {
         {/* Selfie Scan UI Widget Container */}
         <div className="w-full shrink-0">
           <SelfieFilter 
+            eventId={eventId}
+            images={images}
             isFilterActive={isFilterActive} 
             onFilterToggle={handleFilterToggle} 
+            onMatchesFound={setMatchedImageIds}
           />
         </div>
 
