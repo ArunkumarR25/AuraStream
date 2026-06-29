@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Smartphone, Terminal, Zap } from 'lucide-react';
+import { Copy, Check, ExternalLink, Smartphone, Terminal, Zap, Wifi } from 'lucide-react';
+
+// Railway FTP server details — set these in Vercel environment variables:
+//   NEXT_PUBLIC_FTP_HOST  →  e.g. "roundhouse.proxy.rlwy.net"
+//   NEXT_PUBLIC_FTP_PORT  →  e.g. "12345"
+const FTP_HOST = process.env.NEXT_PUBLIC_FTP_HOST || 'not-configured';
+const FTP_PORT = process.env.NEXT_PUBLIC_FTP_PORT || '2121';
 
 export default function CameraIntegration({ eventId, uploadSecret }) {
   const [copied,  setCopied]  = useState('');
@@ -17,6 +23,8 @@ export default function CameraIntegration({ eventId, uploadSecret }) {
   const qrMobile  = mobileUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=0f172a&bgcolor=ffffff&data=${encodeURIComponent(mobileUrl)}`
     : '';
+
+  const ftpConfigured = FTP_HOST !== 'not-configured';
 
   const copy = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -110,26 +118,42 @@ export default function CameraIntegration({ eventId, uploadSecret }) {
           </div>
 
           <div className="space-y-4">
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-[11px] leading-relaxed">
-              <p className="font-bold text-emerald-900 mb-1">⭐ Zero-Code Photographer Flow</p>
-              No coding required! Your camera can connect directly to our built-in FTP server. Every photo you take will stream instantly to the website.
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Server / Host</p>
-                <div className="flex items-center justify-between gap-1 mt-1">
-                  <code className="text-[11px] font-mono text-slate-800 font-bold truncate">
-                    {baseUrl ? baseUrl.replace(/^https?:\/\//, '').split(':')[0] : 'localhost'}
-                  </code>
-                  <CopyBtn text={baseUrl ? baseUrl.replace(/^https?:\/\//, '').split(':')[0] : 'localhost'} id="ftp-host" />
+            {/* Status banner */}
+            {ftpConfigured ? (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-[11px] leading-relaxed flex items-start gap-2">
+                <Wifi className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-emerald-900 mb-0.5">☁️ Cloud FTP Gateway — Online</p>
+                  Camera-ல FTP settings போட்டா போதும். Photo எடுத்தவுடன் instantly live stream ஆகும்!
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-[11px] leading-relaxed">
+                <p className="font-bold text-amber-900 mb-0.5">⚠️ FTP Gateway not configured</p>
+                Vercel-ல <code className="font-mono bg-amber-100 px-1 rounded">NEXT_PUBLIC_FTP_HOST</code> and{' '}
+                <code className="font-mono bg-amber-100 px-1 rounded">NEXT_PUBLIC_FTP_PORT</code> set பண்ணுங்க.
+              </div>
+            )}
+
+            {/* Camera credentials grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`border rounded-xl p-3 ${
+                ftpConfigured ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'
+              }`}>
+                <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Host / Server</p>
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <code className="text-[10px] font-mono text-slate-800 font-bold truncate">{FTP_HOST}</code>
+                  <CopyBtn text={FTP_HOST} id="ftp-host" />
+                </div>
+              </div>
+              <div className={`border rounded-xl p-3 ${
+                ftpConfigured ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'
+              }`}>
                 <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Port</p>
                 <div className="flex items-center justify-between gap-1 mt-1">
-                  <code className="text-[11px] font-mono text-slate-800 font-bold">2121</code>
-                  <CopyBtn text="2121" id="ftp-port" />
+                  <code className="text-[11px] font-mono text-slate-800 font-bold">{FTP_PORT}</code>
+                  <CopyBtn text={FTP_PORT} id="ftp-port" />
                 </div>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
@@ -148,15 +172,15 @@ export default function CameraIntegration({ eventId, uploadSecret }) {
               </div>
             </div>
 
+            {/* Camera setup instructions */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-[11px] text-blue-800 space-y-1">
-              <p className="font-bold text-blue-900 mb-1.5">How to configure on your Camera:</p>
+              <p className="font-bold text-blue-900 mb-1.5">📷 Camera-ல எப்படி set பண்றது:</p>
               {[
-                'Connect your camera to Wi-Fi (e.g., your phone hotspot or event Wi-Fi).',
-                'Go to your Camera settings → Network / FTP Transfer Settings.',
-                'Add a new FTP connection server with the Host, Port, Username, and Password shown above.',
-                'Select FTP protocol (Plain FTP / no encryption) and Passive Mode.',
-                'Start the gateway server on the host: run "npm run ftp" in the project terminal.',
-                'Take a picture! The camera will upload it directly over FTP, and it will immediately show on the guest stream!',
+                'Camera-ஐ WiFi-ல connect பண்ணுங்க (phone hotspot / venue WiFi).',
+                'Camera menu → Network / FTP Transfer Settings → New Server.',
+                'Host, Port, Username, Password மேலே இருக்கறதை enter பண்ணுங்க.',
+                'Protocol: Plain FTP (no encryption)  |  Mode: Passive (PASV).',
+                'Photo எடுங்க — automatically upload ஆகும், guest stream-ல instantly தெரியும்! 🎉',
               ].map((s, i) => (
                 <p key={i} className="flex items-start gap-2"><span className="text-blue-500 font-bold">{i + 1}.</span>{s}</p>
               ))}
