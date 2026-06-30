@@ -26,9 +26,15 @@ export async function POST(request, { params }) {
   const secretHeader = request.headers.get('x-upload-secret');
   const providedSecret = secretParam || secretHeader;
 
-  console.log(`[upload] secret check — provided: ${!!providedSecret}, expected: ${!!UPLOAD_SECRET}`);
+  // Bypass secret check if request comes from our own website (same-origin browser uploads)
+  const host = request.headers.get('host') || '';
+  const origin = request.headers.get('origin') || '';
+  const referer = request.headers.get('referer') || '';
+  const isSameOrigin = (origin && origin.includes(host)) || (referer && referer.includes(host));
 
-  if (UPLOAD_SECRET && providedSecret !== UPLOAD_SECRET) {
+  console.log(`[upload] secret check — provided: ${!!providedSecret}, expected: ${!!UPLOAD_SECRET}, isSameOrigin: ${isSameOrigin}`);
+
+  if (UPLOAD_SECRET && !isSameOrigin && providedSecret !== UPLOAD_SECRET) {
     console.warn(`[upload] REJECTED — secret mismatch`);
     return NextResponse.json(
       { error: 'Unauthorized: invalid upload secret' },
