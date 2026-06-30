@@ -20,11 +20,26 @@ export default function UploadPage({ params, searchParams }) {
   const resolvedParams  = React.use(params);
   const resolvedSearch  = React.use(searchParams);
   const { eventId }     = resolvedParams;
-  // Fall back to build-time NEXT_PUBLIC_UPLOAD_HINT so uploads work
-  // even when the page is opened without ?secret= in the URL
-  const secret          = resolvedSearch?.secret
-                          || process.env.NEXT_PUBLIC_UPLOAD_HINT
-                          || '';
+
+  // ── Secret resolution ─────────────────────────────────────
+  // Priority: URL param → localStorage (saved from previous visit) → empty
+  // This means: scan QR once (with ?secret=), and it works forever after
+  // even if the URL no longer carries the secret param.
+  const STORAGE_KEY = 'aura_upload_secret';
+  const urlSecret   = resolvedSearch?.secret || '';
+  const [secret, setSecret] = useState(urlSecret);
+
+  useEffect(() => {
+    if (urlSecret) {
+      // Got secret from URL — save it for future visits
+      localStorage.setItem(STORAGE_KEY, urlSecret);
+      setSecret(urlSecret);
+    } else {
+      // No secret in URL — try to recover from localStorage
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setSecret(saved);
+    }
+  }, [urlSecret]);
 
   const [eventName,    setEventName]    = useState('Wedding Event');
   const [count,        setCount]        = useState(0);
