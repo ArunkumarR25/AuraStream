@@ -22,12 +22,19 @@ export default function UploadPage({ params, searchParams }) {
   const { eventId }     = resolvedParams;
 
   // ── Secret resolution ─────────────────────────────────────
-  // Priority: URL param → localStorage (saved from previous visit) → empty
-  // This means: scan QR once (with ?secret=), and it works forever after
-  // even if the URL no longer carries the secret param.
+  // Priority: URL param → localStorage → public environment variable → default secret fallback
   const STORAGE_KEY = 'aura_upload_secret';
   const urlSecret   = resolvedSearch?.secret || '';
-  const [secret, setSecret] = useState(urlSecret);
+  const DEFAULT_SECRET = 'aura-secret-change-me-2026';
+
+  const [secret, setSecret] = useState(() => {
+    if (urlSecret) return urlSecret;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return saved;
+    }
+    return process.env.NEXT_PUBLIC_UPLOAD_HINT || DEFAULT_SECRET;
+  });
 
   useEffect(() => {
     if (urlSecret) {
@@ -35,9 +42,13 @@ export default function UploadPage({ params, searchParams }) {
       localStorage.setItem(STORAGE_KEY, urlSecret);
       setSecret(urlSecret);
     } else {
-      // No secret in URL — try to recover from localStorage
+      // No secret in URL — try to recover from localStorage or fall back
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setSecret(saved);
+      if (saved) {
+        setSecret(saved);
+      } else {
+        setSecret(process.env.NEXT_PUBLIC_UPLOAD_HINT || DEFAULT_SECRET);
+      }
     }
   }, [urlSecret]);
 
