@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, CheckCircle, AlertCircle, Loader2, Zap, Image as ImageIcon } from 'lucide-react';
+import { Camera, CheckCircle, AlertCircle, Loader2, Zap, Image as ImageIcon, Video, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
@@ -29,7 +29,14 @@ export default function UploadPage({ params, searchParams }) {
   const [recentPhotos, setRecentPhotos] = useState([]); // { url, id }
   const [isReady,      setIsReady]      = useState(false);
 
+  // Webcam states
+  const [uploadMode,      setUploadMode]      = useState('native'); // native | webcam
+  const [devices,         setDevices]         = useState([]);
+  const [selectedDeviceId,setSelectedDeviceId]= useState('');
+  
   const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   // ── Fetch event name ────────────────────────────────────────
   useEffect(() => {
@@ -92,7 +99,105 @@ export default function UploadPage({ params, searchParams }) {
     inputRef.current?.click();
   };
 
-  // ─────────────────────────────────────────────────────────────
+  // ── Webcam Stream Management ───────────────────────────────
+  const stopWebcam = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const startWebcam = async (deviceId) => {
+    stopWebcam();
+    try {
+      const constraints = {
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      // Re-enumerate devices in case labels are now populated after permission grant
+      await getDevices();
+    } catch (err) {
+      console.error('Failed to access webcam:', err);
+      setErrorMsg('Webcam access error: ' + err.message);
+      setStatus('error');
+    }
+  };
+
+  const getDevices = async () => {
+    try {
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = allDevices.filter(d => d.kind === 'videoinput');
+      setDevices(videoDevices);
+      if (videoDevices.length > 0 && !selectedDeviceId) {
+        setSelectedDeviceId(videoDevices[0].deviceId);
+      }
+    } catch (err) {
+      console.error('Error enumerating devices:', err);
+    }
+  };
+
+  // Handle webcam toggle/cleanup lifecycle
+  useEffect(() => {
+    if (uploadMode === 'webcam') {
+      startWebcam(selectedDeviceId);
+    } else {
+      stopWebcam();
+    }
+    return () => {
+      stopWebcam();
+    };
+  }, [uploadMode, selectedDeviceId]);
+
+  // Capture frame from live video feed
+  const captureWebcam = async () => {
+    if (status === 'uploading' || !videoRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+
+    const ctx = canvas.getContext('2d');
+    // Mirror standard preview on canvas if using front camera (we'll check default front mirroring)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) {
+          setStatus('error');
+          setErrorMsg('Failed to capture frame from webcam.');
+          return;
+        }
+        const file = new File([blob], `camera-webcam-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        await uploadFile(file);
+      },
+      'image/jpeg',
+      0.92
+    );
+  };
+
+  // Handle spacebar click to capture
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (uploadMode === 'webcam' && e.code === 'Space') {
+        const activeEl = document.activeElement;
+        const isInputField = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
+        if (!isInputField) {
+          e.preventDefault();
+          captureWebcam();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [uploadMode, selectedDeviceId, status]);
 
   return (
     <div className="min-h-screen bg-[#080808] flex flex-col items-center font-sans select-none overflow-hidden">
@@ -126,104 +231,215 @@ export default function UploadPage({ params, searchParams }) {
         </motion.div>
       )}
 
-      {/* ── MAIN SHUTTER BUTTON ────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full px-6 py-8">
-
-        {/* Big shutter circle container */}
-        <div
-          className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 cursor-pointer z-10"
-          style={{ width: 200, height: 200 }}
+      {/* Shutter mode toggle tabs */}
+      <div className="flex bg-zinc-900/80 border border-zinc-800/80 rounded-full p-1 max-w-xs w-[90%] mt-5 mb-3 z-10">
+        <button
+          onClick={() => setUploadMode('native')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3.5 rounded-full text-xs font-bold transition-all ${
+            uploadMode === 'native'
+              ? 'bg-gradient-to-r from-gold-600 to-gold-500 text-white shadow-md'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
         >
-          {/* Transparent file input overlaying the entire shutter button */}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            disabled={status === 'uploading'}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 disabled:cursor-not-allowed"
-            aria-label="Take and upload photo"
-          />
+          <Camera className="h-3.5 w-3.5" />
+          Native Shutter
+        </button>
+        <button
+          onClick={() => setUploadMode('webcam')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3.5 rounded-full text-xs font-bold transition-all ${
+            uploadMode === 'webcam'
+              ? 'bg-gradient-to-r from-gold-600 to-gold-500 text-white shadow-md'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Video className="h-3.5 w-3.5" />
+          Webcam Stream
+        </button>
+      </div>
 
-          {/* Outer pulse ring */}
-          {status === 'idle' && (
-            <span className="absolute inset-0 rounded-full border-2 border-gold-500/30 animate-ping z-0" />
-          )}
+      {uploadMode === 'native' ? (
+        /* ── MAIN SHUTTER BUTTON ────────────────────────────── */
+        <div className="flex-1 flex flex-col items-center justify-center w-full px-6 py-6">
 
-          {/* Outer ring */}
-          <span className={`absolute inset-0 rounded-full border-4 transition-colors duration-300 z-0 ${
-            status === 'uploading' ? 'border-gold-600' :
-            status === 'success'  ? 'border-emerald-500' :
-            status === 'error'    ? 'border-rose-500' :
-            'border-gold-500/50'
-          }`} />
+          {/* Big shutter circle container */}
+          <div
+            className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 cursor-pointer z-10"
+            style={{ width: 200, height: 200 }}
+          >
+            {/* Transparent file input overlaying the entire shutter button */}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              disabled={status === 'uploading'}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 disabled:cursor-not-allowed"
+              aria-label="Take and upload photo"
+            />
 
-          {/* Inner filled circle */}
-          <span className={`absolute inset-3 rounded-full transition-colors duration-300 z-0 ${
-            status === 'uploading' ? 'bg-gold-700/60' :
-            status === 'success'  ? 'bg-emerald-800/60' :
-            status === 'error'    ? 'bg-rose-900/60' :
-            'bg-zinc-800/80 hover:bg-zinc-700/80'
-          }`} />
+            {/* Outer pulse ring */}
+            {status === 'idle' && (
+              <span className="absolute inset-0 rounded-full border-2 border-gold-500/30 animate-ping z-0" />
+            )}
 
-          {/* Icon inside */}
-          <span className="relative z-10 flex flex-col items-center gap-2 pointer-events-none">
+            {/* Outer ring */}
+            <span className={`absolute inset-0 rounded-full border-4 transition-colors duration-300 z-0 ${
+              status === 'uploading' ? 'border-gold-600' :
+              status === 'success'  ? 'border-emerald-500' :
+              status === 'error'    ? 'border-rose-500' :
+              'border-gold-500/50'
+            }`} />
+
+            {/* Inner filled circle */}
+            <span className={`absolute inset-3 rounded-full transition-colors duration-300 z-0 ${
+              status === 'uploading' ? 'bg-gold-700/60' :
+              status === 'success'  ? 'bg-emerald-800/60' :
+              status === 'error'    ? 'bg-rose-900/60' :
+              'bg-zinc-800/80 hover:bg-zinc-700/80'
+            }`} />
+
+            {/* Icon inside */}
+            <span className="relative z-10 flex flex-col items-center gap-2 pointer-events-none">
+              <AnimatePresence mode="wait">
+                {status === 'idle' && (
+                  <motion.div key="idle" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
+                    <Camera className="h-16 w-16 text-gold-300" />
+                  </motion.div>
+                )}
+                {status === 'uploading' && (
+                  <motion.div key="uploading" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
+                    <Loader2 className="h-16 w-16 text-gold-400 animate-spin" />
+                  </motion.div>
+                )}
+                {status === 'success' && (
+                  <motion.div key="success" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
+                    <CheckCircle className="h-16 w-16 text-emerald-400" />
+                  </motion.div>
+                )}
+                {status === 'error' && (
+                  <motion.div key="error" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
+                    <AlertCircle className="h-16 w-16 text-rose-400" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </span>
+          </div>
+
+          {/* Status label under button */}
+          <div className="mt-6 h-10 flex items-center justify-center text-center">
             <AnimatePresence mode="wait">
               {status === 'idle' && (
-                <motion.div key="idle" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
-                  <Camera className="h-16 w-16 text-gold-300" />
-                </motion.div>
+                <motion.p key="lbl-idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
+                  Tap to Shoot & Upload
+                </motion.p>
               )}
               {status === 'uploading' && (
-                <motion.div key="uploading" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
-                  <Loader2 className="h-16 w-16 text-gold-400 animate-spin" />
-                </motion.div>
+                <motion.p key="lbl-up" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-sm font-bold text-gold-400 uppercase tracking-widest">
+                  Uploading to guest stream…
+                </motion.p>
               )}
               {status === 'success' && (
-                <motion.div key="success" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
-                  <CheckCircle className="h-16 w-16 text-emerald-400" />
-                </motion.div>
+                <motion.p key="lbl-ok" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-sm font-bold text-emerald-400 uppercase tracking-widest">
+                  ✓ Live on guest stream!
+                </motion.p>
               )}
               {status === 'error' && (
-                <motion.div key="error" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
-                  <AlertCircle className="h-16 w-16 text-rose-400" />
+                <motion.div key="lbl-err" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-center">
+                  <p className="text-sm font-bold text-rose-400 uppercase tracking-widest">Upload Failed</p>
+                  <p className="text-[11px] text-rose-600 mt-1 max-w-[220px]">{errorMsg}</p>
                 </motion.div>
               )}
             </AnimatePresence>
-          </span>
+          </div>
         </div>
+      ) : (
+        /* ── WEBCAM STREAM VIEW ─────────────────────────────── */
+        <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md px-6 py-6 gap-4">
+          
+          {/* Webcam Selection */}
+          {devices.length > 1 && (
+            <div className="w-full flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 z-10">
+              <label htmlFor="camera-select" className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Camera:</label>
+              <select
+                id="camera-select"
+                value={selectedDeviceId}
+                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                className="flex-1 bg-transparent text-xs text-zinc-300 font-medium focus:outline-none border-none cursor-pointer"
+              >
+                {devices.map((device, i) => (
+                  <option key={device.deviceId} value={device.deviceId} className="bg-zinc-950 text-zinc-300">
+                    {device.label || `Camera ${i + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {/* Status label under button */}
-        <div className="mt-6 h-10 flex items-center justify-center text-center">
-          <AnimatePresence mode="wait">
-            {status === 'idle' && (
-              <motion.p key="lbl-idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
-                Tap to Shoot & Upload
-              </motion.p>
-            )}
-            {status === 'uploading' && (
-              <motion.p key="lbl-up" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="text-sm font-bold text-gold-400 uppercase tracking-widest">
-                Uploading to guest stream…
-              </motion.p>
-            )}
-            {status === 'success' && (
-              <motion.p key="lbl-ok" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="text-sm font-bold text-emerald-400 uppercase tracking-widest">
-                ✓ Live on guest stream!
-              </motion.p>
-            )}
-            {status === 'error' && (
-              <motion.div key="lbl-err" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="text-center">
-                <p className="text-sm font-bold text-rose-400 uppercase tracking-widest">Upload Failed</p>
-                <p className="text-[11px] text-rose-600 mt-1 max-w-[220px]">{errorMsg}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Webcam Stream Feed Window */}
+          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover scale-x-[-1]" // mirror by default
+            />
+
+            {/* Upload status overlay */}
+            <AnimatePresence>
+              {status !== 'idle' && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className={`absolute inset-0 flex flex-col items-center justify-center backdrop-blur-sm z-20 ${
+                    status === 'uploading' ? 'bg-zinc-950/60' :
+                    status === 'success' ? 'bg-emerald-950/60' :
+                    'bg-rose-950/60'
+                  }`}
+                >
+                  {status === 'uploading' && (
+                    <>
+                      <Loader2 className="h-10 w-10 text-gold-400 animate-spin mb-2" />
+                      <p className="text-xs font-bold text-gold-400 uppercase tracking-widest">Uploading Frame…</p>
+                    </>
+                  )}
+                  {status === 'success' && (
+                    <>
+                      <CheckCircle className="h-10 w-10 text-emerald-400 mb-2" />
+                      <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Success!</p>
+                    </>
+                  )}
+                  {status === 'error' && (
+                    <>
+                      <AlertCircle className="h-10 w-10 text-rose-400 mb-2" />
+                      <p className="text-xs font-bold text-rose-400 uppercase tracking-widest">Failed</p>
+                      <p className="text-[10px] text-rose-500 mt-1 max-w-[200px] text-center">{errorMsg}</p>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Capture Trigger Button */}
+          <div className="flex flex-col items-center gap-2 mt-2 w-full">
+            <button
+              onClick={captureWebcam}
+              disabled={status === 'uploading'}
+              className="w-full py-3.5 bg-gradient-to-r from-gold-600 to-gold-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:from-gold-500 hover:to-gold-400 z-10 flex items-center justify-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Capture & Upload
+            </button>
+            <p className="text-[10px] text-zinc-500 font-medium">
+              Tip: Press <kbd className="bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">Spacebar</kbd> to capture instantly!
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Recent uploads thumbnails strip */}
       <AnimatePresence>
