@@ -20,7 +20,11 @@ export default function UploadPage({ params, searchParams }) {
   const resolvedParams  = React.use(params);
   const resolvedSearch  = React.use(searchParams);
   const { eventId }     = resolvedParams;
-  const secret          = resolvedSearch?.secret || '';
+  // Fall back to build-time NEXT_PUBLIC_UPLOAD_HINT so uploads work
+  // even when the page is opened without ?secret= in the URL
+  const secret          = resolvedSearch?.secret
+                          || process.env.NEXT_PUBLIC_UPLOAD_HINT
+                          || '';
 
   const [eventName,    setEventName]    = useState('Wedding Event');
   const [count,        setCount]        = useState(0);
