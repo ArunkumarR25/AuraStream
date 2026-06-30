@@ -202,72 +202,61 @@ export default function CameraIntegration({ eventId, uploadSecret }) {
           </div>
         )}
 
-        {/* ── FLOW 4: DSLR WIFI FTP ─────────────────── */}
+        {/* ── FLOW 4: DSLR WIFI SFTP ─────────────────── */}
         {activeTab === 'flow-4' && (
           <div className="space-y-4">
             <div>
               <span className="bg-gold-50 text-gold-800 border border-gold-200 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">
-                WiFi DSLR Tethering · Free
+                Tethering Cloud Gateway · Laptop-Free
               </span>
-              <h4 className="text-sm font-bold text-slate-800 mt-2">Local FTP Server Gateway</h4>
+              <h4 className="text-sm font-bold text-slate-800 mt-2">Cloud SFTP Upload Gateway</h4>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Connect your professional camera (Canon, Nikon, Sony, etc.) directly using WiFi. Your camera transfers photos via WiFi to a local FTP gateway running on your laptop, which sends them to Supabase.
+                Connect your professional camera (Canon, Sony, Nikon, etc.) directly to the cloud. Your camera transfers photos via WiFi directly to the SFTP server hosted on Railway, which uploads them to Supabase in real-time. <strong>No laptop required at the venue!</strong>
               </p>
-            </div>
-
-            {/* Port info alert */}
-            <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-3.5 text-xs flex gap-2.5">
-              <Info className="h-4.5 w-4.5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-blue-900">Rendu Port confusion details (No Credit Cards):</p>
-                <p className="text-blue-800 mt-1 leading-relaxed">
-                  Next.js website runs on standard web ports (port 3000 local or Vercel free cloud). 
-                  The local FTP gateway runs only on your laptop on <strong>port 2121</strong>.
-                  You do NOT need to deploy the FTP server on any credit-card cloud servers like fly.io! 
-                  Simply run it locally on your laptop network for 100% free.
-                </p>
-              </div>
             </div>
 
             {/* Connection settings */}
             <div className="space-y-3">
-              <p className="text-xs font-bold text-slate-700">Local Connection Credentials:</p>
+              <p className="text-xs font-bold text-slate-700">SFTP Connection Credentials:</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">Local Host / Network IP</p>
-                  <code className="text-xs text-slate-800 font-bold block mt-1">Check terminal output when running</code>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">SFTP Host / Server</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <code className="text-xs text-slate-800 font-bold truncate max-w-[150px]">{FTP_HOST}</code>
+                    <CopyBtn text={FTP_HOST} id="sftp-host" />
+                  </div>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Port (local)</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">SFTP Port</p>
                   <div className="flex items-center justify-between mt-1">
                     <code className="text-xs text-slate-800 font-bold">{FTP_PORT}</code>
-                    <CopyBtn text={FTP_PORT} id="ftp-port" />
+                    <CopyBtn text={FTP_PORT} id="sftp-port" />
                   </div>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Username</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">SFTP Username</p>
                   <div className="flex items-center justify-between mt-1">
                     <code className="text-xs text-slate-800 font-bold">event_{eventId}</code>
-                    <CopyBtn text={`event_${eventId}`} id="ftp-username" />
+                    <CopyBtn text={`event_${eventId}`} id="sftp-username" />
                   </div>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">FTP Password</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">SFTP Password</p>
                   <div className="flex items-center justify-between mt-1">
                     <code className="text-xs text-slate-800 font-bold truncate max-w-[150px]">{uploadSecret}</code>
-                    <CopyBtn text={uploadSecret} id="ftp-password" />
+                    <CopyBtn text={uploadSecret} id="sftp-password" />
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-3 text-xs text-slate-600 space-y-1.5">
-              <p className="font-bold text-slate-700 mb-1">How to run locally:</p>
-              <p className="flex gap-2"><span>1.</span> Open your laptop command terminal inside the project directory.</p>
-              <p className="flex gap-2"><span>2.</span> Run: <code className="bg-zinc-200 px-1 py-0.5 rounded font-mono text-[10px]">npm run ftp</code> (Starts FTP server on port 2121).</p>
-              <p className="flex gap-2"><span>3.</span> Connect your DSLR to the same WiFi network (e.g. your phone hotspot).</p>
-              <p className="flex gap-2"><span>4.</span> In camera FTP settings, enter your laptop IP, port 2121, username, and password.</p>
-              <p className="flex gap-2"><span>5.</span> Take photos on DSLR — they transfer to laptop WiFi and upload instantly!</p>
+              <p className="font-bold text-slate-700 mb-1">📷 Camera settings setup:</p>
+              <p className="flex gap-2"><span>1.</span> Connect DSLR/Mirrorless camera to WiFi (venue WiFi or phone hotspot).</p>
+              <p className="flex gap-2"><span>2.</span> In Camera Menu, navigate to <strong>FTP Transfer settings</strong> (or SFTP if supported).</p>
+              <p className="flex gap-2"><span>3.</span> Set connection type to <strong>SFTP (SSH File Transfer Protocol)</strong>.</p>
+              <p className="flex gap-2"><span>4.</span> Enter the Cloud SFTP Host, Port, Username, and Password shown above.</p>
+              <p className="flex gap-2"><span>5.</span> Take photos on DSLR — they transfer directly to the cloud and stream instantly!</p>
             </div>
           </div>
         )}
